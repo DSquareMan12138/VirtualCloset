@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.py[cod]
+.idea/
+.env
+data/*
+!data/.gitkeep
+*.db
+*.db-*
+*.sqlite*
+*.log
+.pytest_cache/
+picture/sample_pics/*.jpg
+picture/sample_pics/*.png
+!closet.db

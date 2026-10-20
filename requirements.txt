@@ -1,0 +1,6 @@
+streamlit==1.66.0
+transformers==4.57.1
+Pillow==12.3.0
+# Install CUDA PyTorch separately; see README.md or setup_windows.ps1.
+rembg[cpu]>=2.0.67,<3
+
