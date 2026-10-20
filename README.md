@@ -1,153 +1,157 @@
 # VirtualCloset
 
-A local Python / Streamlit class demo: private accounts, batch clothing uploads,
-automatic FashionCLIP recognition, a persistent virtual closet, and today's outfit.
-No paid API keys are required. Presentation, shopping links and virtual try-on are outside this version.
+A local wardrobe app built with Python and Streamlit. Upload clothing photos, review their details, organize your closet, and generate outfit suggestions from clothes you own.
 
-## Open and run
+## Features
 
-Extract this folder to a NEW location, for example `E:\MyFile\Codiing\Python\VirtualClosetDemo`.
-Do not extract over your old project or move its virtual environment.
-Open the extracted folder containing `app.py` in PyCharm.
+- Separate user accounts and closets; new accounts start empty.
+- Batch photo uploads with background removal before attribute recognition.
+- Review each photo beside its editable name, brand, and category before saving.
+- Searchable brand selector with alphabetical brands, Other, and custom text entry.
+- Category filters, saved item names, renaming, and batch removal with confirmation.
+- Per-account background color applied to clothing cutouts in closet and outfit views.
+- Up to three distinct outfit suggestions, with clothes displayed in a row per suggestion on desktop.
+- Occasion, optional mood/style, optional jacket or coat, and Refresh controls.
 
-On Dylan's current computer, double-click `Start_VirtualCloset.bat` to launch.
-It uses this project's `.venv` if available, otherwise the existing E: project interpreter,
-otherwise `python` on PATH. No source-file editing is needed.
+## Installation and launch
 
-You can reuse your existing interpreter:
-`E:\MyFile\Codiing\Python\VirtualCloset\.venv\Scripts\python.exe`
+Run commands from the project folder containing `app.py`. Use a Python environment with PyTorch installed. The included Windows setup script targets Python 3.13 and CUDA 12.6 wheels; GPU support depends on compatible hardware and drivers.
 
-From the new folder's terminal run:
+### Existing environment / PyCharm
+
+Select your project's Python interpreter, then run in its activated terminal:
 
 ```powershell
-& 'E:\MyFile\Codiing\Python\VirtualCloset\.venv\Scripts\python.exe' -m streamlit run app.py
+python -m pip install -r requirements.txt
+python -m streamlit run app.py
 ```
 
-Stop the previous app with Ctrl+C first if port 8501 is occupied.
-The application opens at http://localhost:8501. Register your own account; there is no preset password.
-The first account automatically receives the three previously saved demo clothes from
-`data/legacy_closet.db`. Other accounts start empty. The legacy snapshot is retained as a backup.
-Initial recommendation for imported clothes computes the missing embeddings automatically.
+`requirements.txt` does not install PyTorch. If your environment does not already have it, install a PyTorch build suitable for your computer before launching.
 
-## Fresh installation
-
-Python 3.13 on Windows, tested with RTX 3060. In PowerShell:
+### Included Windows setup
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\setup_windows.ps1
 powershell -ExecutionPolicy Bypass -File .\run_windows.ps1
 ```
 
-The setup script creates a local `.venv` and installs PyTorch 2.9.1 / torchvision 0.24.1
-from the CUDA 12.6 wheel index, then the pinned application dependencies.
-CPU inference is supported but slower. CUDA is selected when available.
-Model weights are downloaded from Hugging Face on first use and cached outside this project.
-The existing Hugging Face cache on this computer is reused. The ZIP does not contain model weights.
+`setup_windows.ps1` creates `.venv`, installs PyTorch and torchvision, and installs the app dependencies. Once set up, `Start_VirtualCloset.bat` launches the app through `run_windows.ps1`.
 
-## Use
+The current launcher prefers the project's `.venv`, then tries an author-specific interpreter path, then `python` on PATH. A project-local `.venv` avoids relying on that fallback.
 
-1. Create an account or log in.
-2. Add clothes: select multiple photos and click Add to closet. Use one garment per image.
-3. My closet shows your saved thumbnails. Attributes remain internal.
-4. Today's outfit: choose an occasion, optionally include a coat/jacket, and request a suggestion.
-5. Add more tops/bottoms/shoes to see meaningful alternatives. The original three garments yield
-   one top-bottom combination, with an optional coat; the app explicitly reports this limitation.
-6. Remove an item through its confirmation control. Removal only affects the signed-in account.
+Open the local URL printed in the terminal, normally `http://localhost:8501`. Stop the server with Ctrl+C.
 
-## Structure
+The first model use requires internet access to download weights. Later runs reuse cached weights. No paid inference API or additional model training is required; computation runs on your computer.
 
-- `app.py`: user interface / entry point
-- `virtual_closet/auth.py`: password hashing and validation
-- `virtual_closet/database.py`: users, owned items, migration, CRUD
-- `virtual_closet/model.py`: pretrained FashionCLIP inference and embeddings
-- `virtual_closet/attributes.py`: prompt vocabulary
-- `virtual_closet/recommendation.py`: occasion retrieval and outfit assembly
-- `virtual_closet/images.py`: validation, orientation, thumbnails
-- `virtual_closet/config.py`: paths and model settings
-- `scripts/`: model, attribute, and database inspection commands
-- `tests/`: account isolation, migration, and recommendation checks
-- `data/`: runtime SQLite database and legacy snapshot
-- `picture/sample_pics/`: your three sample images
+## Using the app
 
-Paths are resolved from the project folder, not the terminal's current directory.
-Set `VIRTUALCLOSET_DATA_DIR` to override the data directory (used for isolated tests).
+1. Register an account or log in.
+2. In Add clothes, select photos and click Analyze photos.
+3. Review the cutout, name, brand, and category. Click Add to closet above or below the batch.
+4. In My closet, filter by category, rename items, or select multiple items for removal.
+5. In Today's outfit, choose your preferences and click Suggest outfits. Use Refresh for alternatives.
 
-## Database
+Use one garment per photo. Supported upload types are JPG, JPEG, PNG, and WebP, limited to 20 MB and 24 megapixels per image.
 
-`users`: id, unique normalized username, password_hash, created_at.
+Brands are entered by the user, not detected by FashionCLIP. Leaving the brand unselected, or entering only whitespace under Other, stores an empty brand as SQL NULL and displays Unknown / No brand.
 
-`clothing_items`: id, user_id (foreign key), filename, image_hash, image_data,
-attributes_json, rankings_json, embedding_json, model_id, model_version, created_at.
+Default names combine brand when supplied, color, and subcategory, with fallbacks. Users can override names before saving or rename saved items. Custom categories remain in the closet but are excluded from outfit generation.
 
-Images are resized JPEG BLOBs; originals on your disk are not changed. Attributes and normalized
-image embeddings are stored internally as JSON. UNIQUE(user_id,image_hash) prevents exact-file
-duplicates per user; edited/re-encoded photos are not detected as duplicates. Foreign keys are
-enabled on every connection. All app item operations include the authenticated user's ID.
+## Image processing and performance
 
-## What is learned and what is not
+Upload processing follows this order:
 
-The app really runs `patrickjohncyh/fashion-clip` pretrained weights with PyTorch.
-It encodes each image once, compares its embedding with text prompt embeddings, and stores
-the three highest-ranked labels per attribute. These rankings are not calibrated probabilities.
-Adding labels does not retrain the model. The model can mistake coat types, logos and colors;
-it does not detect/crop multiple garments or reject every non-clothing photo.
+1. Check for an identical uploaded file in the current account or batch.
+2. Remove the background using rembg.
+3. Composite the cutout onto white for FashionCLIP analysis.
+4. Show the review screen, then save only after Add to closet is clicked.
 
-Outfit recommendation is a hybrid demo, inspired by Loom's category-slot retrieval approach:
+Original upload bytes and transparent cutouts are stored separately. The selected display color does not affect recognition. Existing items without cutouts can be processed using Remove backgrounds from existing clothes.
 
-- FashionCLIP image/text cosine similarity measures relevance to the chosen occasion.
-- Candidate slots are top + bottom OR dress, with shoes when present and an optional outer layer.
-- At most eight model-ranked items per slot enter candidate enumeration.
-- Candidate score = mean occasion cosine + 0.04 * simple color heuristic
-  - 0.02 * max(0, number of non-solid pieces - 1).
-- The color heuristic counts equal-color pairs or pairs containing a neutral color.
-- Up to three options rotate within the five highest-ranked candidates by local date and button clicks.
+rembg uses the smaller `u2netp` model on CPU by default. Set `VIRTUALCLOSET_REMBG_MODEL=u2net` before launching to use the larger model, trading processing time for a potentially different cutout quality.
 
-These heuristics and weights are application design choices, not published FashionCLIP results.
-Semantic similarity is NOT proof of outfit compatibility. This demo does not train on user behavior,
-run FGAT, predict fit, use live weather, or claim scientifically evaluated recommendation quality.
+FashionCLIP uses CUDA when available, otherwise CPU. Models and text features are reused; display previews are resized and cached. Switching the main tabs does not request a server rerun, although other interactive controls can. First-time downloads and model loading can still take time, and batch photos are analyzed sequentially.
 
-## Research and references
+## Recommendation approach
 
-- Chia et al. (2022), *Contrastive language and vision learning of general fashion concepts*,
-  Scientific Reports 12, 18958. https://doi.org/10.1038/s41598-022-23052-9
-- FashionCLIP code: https://github.com/patrickjohncyh/fashion-clip
-- Weights: https://huggingface.co/patrickjohncyh/fashion-clip
-  The repository describes the later FashionCLIP 2.0 update; do not present the 2022 paper's
-  results as an evaluation of this app or of every later checkpoint.
-- Loom: https://github.com/anushreeberlia/loom — architecture inspiration only; this is an
-  independent small implementation, not a copy of its full stack or its Fashion Florence service.
-- FGAT: https://github.com/sajjadsaed/FGAT — related research reviewed; no FGAT checkpoint is
-  bundled or executed here. Paper: https://doi.org/10.1016/j.mlwa.2025.100802
+The recommender is an independent local Loom-inspired adaptation. It does not install or run the upstream Loom application or a pretrained Loom outfit model.
 
-## Testing and inspection
+FashionCLIP compares stored image embeddings with the requested occasion and mood. The app combines these relevance scores with simple color and pattern heuristics to sample outfits. Suggestions have equal status in the UI; their numbers are labels, not quality rankings.
 
-Run from the project root using the selected Python interpreter:
+Supported combinations are top + bottom or dress, with shoes when available and an optional jacket or coat. If shoes are missing, results are labeled as clothing-only. Refresh favors combinations outside the immediately previous set when enough alternatives exist. Fewer than three combinations, or unavoidable repeats, are explained in the interface.
+
+Very large closets use a maximum of 100,000 sampled candidate combinations. Recommendation quality has not been established by a formal evaluation; visual similarity and heuristic coordination do not guarantee a good outfit.
+
+## Project files
+
+| Path | Purpose |
+| --- | --- |
+| `app.py` | Streamlit interface and application entry point |
+| `requirements.txt` | Application dependencies; PyTorch installed separately |
+| `.streamlit/config.toml` | Streamlit configuration |
+| `virtual_closet/auth.py` | Username validation and password hashing |
+| `virtual_closet/config.py` | Data paths and FashionCLIP settings |
+| `virtual_closet/database.py` | Accounts, clothing records, migrations, and saved preferences |
+| `virtual_closet/attributes.py` | Attribute labels and prompts |
+| `virtual_closet/model.py` | FashionCLIP inference and embedding comparisons |
+| `virtual_closet/images.py` | Image validation, cutouts, and background compositing |
+| `virtual_closet/brands.py` | Brand directory |
+| `virtual_closet/metadata.py` | Naming and reviewed metadata handling |
+| `virtual_closet/recommendation.py` | Outfit combinations and weighted sampling |
+| `tests/` | Automated regression tests |
+| `scripts/` | Optional model and database diagnostics |
+| `data/closet.db` | Current SQLite database |
+| `picture/sample_pics/` | Optional photos for the attribute diagnostic script |
+| `setup_windows.ps1` | Windows environment setup |
+| `run_windows.ps1` / `Start_VirtualCloset.bat` | Windows launch helpers |
+
+Keep package `__init__.py` files. Keep the main directories in place unless the corresponding paths and imports are updated.
+
+## Database and Git
+
+The default database is `data/closet.db`. Set `VIRTUALCLOSET_DATA_DIR` before launching to use another data directory. Paths otherwise resolve relative to the project, not the terminal's working directory.
+
+The database contains two tables: `users` and `clothing_items`. It stores accounts, password hashes, background preferences, clothing names, brands, attributes, embeddings, original images, and cutouts. Images are inside the database; the app does not require the original upload files afterward.
+
+The app creates a database if one is absent and adds supported columns to a compatible existing database. An older incompatible schema raises an error; legacy databases are not automatically imported.
+
+This project may include a deliberately shared demonstration database. To include the default database while keeping other data ignored, put this exception after the existing ignore patterns:
+
+```gitignore
+!data/closet.db
+```
+
+Close the running app before making a database snapshot or committing it. Keep virtual environments, caches, secrets, logs, and SQLite temporary files out of Git. A database committed to Git is a snapshot, not a shared live database.
+
+## Tests and diagnostics
 
 ```powershell
 python -m unittest discover -s tests -v
+```
+
+Optional diagnostics:
+
+```powershell
 python -m scripts.test_model
 python -m scripts.test_attributes
 python -m scripts.inspect_database
 ```
 
-Manual demo checks: register A, upload a batch, repeat the same batch, log out, register B,
-verify B has an empty closet, log back in as A, request an outfit, and remove a test item.
-Account and recommendation tests use disposable databases; they never modify your real closet.
+Model diagnostics require downloaded weights and the inference dependencies. The attribute script reads `picture/sample_pics/` directly and does not exercise the app's background-removal upload flow. Database inspection requires an existing initialized database.
 
-## Local-demo boundaries
+## Scope and limitations
 
-Passwords use salted PBKDF2-HMAC-SHA256 (600,000 iterations) and constant-time comparison.
-Login has a session-level retry delay. This is not production authentication: no password reset,
-email verification, durable rate limiting, HTTPS deployment, or persistent login cookies.
-It binds to localhost by default. Anyone with filesystem access can read the database;
-account separation is application-level, not database encryption. Browser refresh may log you out.
+- This is a local demonstration, not a production authentication or hosting system.
+- Accounts separate data through the application; the database itself is not encrypted.
+- FashionCLIP selects labels from configured candidates. Predictions and cutouts can be wrong.
+- Brand recognition, virtual try-on, shopping links, live weather, and feedback-based learning are not implemented.
+- Narrow screens may stack columns instead of showing all clothing images on one line.
+- A browser refresh may require signing in again.
 
-No attribute editing is exposed to users. The app stores predictions automatically, as requested.
-The first-account legacy import is intended only for this single-computer migration, not a public signup flow.
+## Components
 
-## GitHub
-
-`.gitignore` excludes databases (including the legacy backup), virtual environments, caches,
-and the sample retailer images. Do not force-add those files. The personal delivery ZIP includes
-your sample data for continuity; public source can run with an empty closet and your own images.
-Model weights and sample images retain their respective upstream terms. No automatic publishing is performed.
+- FashionCLIP model identifier: `patrickjohncyh/fashion-clip`
+- Background removal: `rembg`
+- Interface: Streamlit
+- Storage: SQLite
+- Recommendation: local Python combination generation and weighted sampling
